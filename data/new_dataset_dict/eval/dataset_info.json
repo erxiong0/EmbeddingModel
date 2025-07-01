@@ -1,0 +1,54 @@
+{
+  "builder_name": "csv",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "csv",
+  "dataset_size": 6840575,
+  "description": "",
+  "download_checksums": {
+    "/Users/erxiong/Documents/GitHub/EmbeddingModel/data/\u5408\u5e76\u6570\u636e.csv": {
+      "num_bytes": 5936968,
+      "checksum": null
+    }
+  },
+  "download_size": 5936968,
+  "features": {
+    "\u7ec4\u7ec7\u540d\u79f0": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "\u90e8\u95e8\u540d\u79f0": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "a_position": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "b_position": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "relationship": {
+      "dtype": "int64",
+      "_type": "Value"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 12777543,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 6840575,
+      "num_examples": 50072,
+      "dataset_name": "csv"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}

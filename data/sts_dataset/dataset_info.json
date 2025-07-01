@@ -1,0 +1,66 @@
+{
+  "builder_name": "parquet",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "stsb",
+  "dataset_size": 1142229,
+  "description": "",
+  "download_checksums": {
+    "hf://datasets/sentence-transformers/stsb@ab7a5ac0e35aa22088bdcf23e7fd99b220e53308/data/train-00000-of-00001.parquet": {
+      "num_bytes": 470612,
+      "checksum": null
+    },
+    "hf://datasets/sentence-transformers/stsb@ab7a5ac0e35aa22088bdcf23e7fd99b220e53308/data/validation-00000-of-00001.parquet": {
+      "num_bytes": 142187,
+      "checksum": null
+    },
+    "hf://datasets/sentence-transformers/stsb@ab7a5ac0e35aa22088bdcf23e7fd99b220e53308/data/test-00000-of-00001.parquet": {
+      "num_bytes": 108100,
+      "checksum": null
+    }
+  },
+  "download_size": 720899,
+  "features": {
+    "sentence1": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "sentence2": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "score": {
+      "dtype": "float64",
+      "_type": "Value"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 1863128,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 755817,
+      "num_examples": 5749,
+      "dataset_name": "stsb"
+    },
+    "validation": {
+      "name": "validation",
+      "num_bytes": 216252,
+      "num_examples": 1500,
+      "dataset_name": "stsb"
+    },
+    "test": {
+      "name": "test",
+      "num_bytes": 170160,
+      "num_examples": 1379,
+      "dataset_name": "stsb"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}
