@@ -41,16 +41,16 @@ def setup_wandb():
             name=f"position-sts-embedding-balanced-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
             config={
                 "model_name": MODEL_PATH.split("/")[-1],
-                "train_batch_size": 128,  # 适中的批次大小
-                "num_train_epochs": 3,    # 适中的训练轮数
-                "learning_rate": 3e-6,    # 适中的学习率
-                "warmup_ratio": 0.1,      # 适中的warmup
+                "train_batch_size": 128,  
+                "num_train_epochs": 3,    
+                "learning_rate": 3e-6,    
+                "warmup_ratio": 0.1,      
                 "fp16": True,
-                "eval_steps": 300,        # 适中的评估频率
-                "save_steps": 30000,      # 适中的保存频率
-                "logging_steps": 30,      # 适中的日志频率
-                "gradient_accumulation_steps": 4,  # 适中的梯度累积
-                "weight_decay": 0.01,     # 适中的权重衰减
+                "eval_steps": 300,        
+                "save_steps": 30000,      
+                "logging_steps": 30,      
+                "gradient_accumulation_steps": 4,  
+                "weight_decay": 0.01,     
                 "dataset_path": DATA_PATH,
                 "sts_path": STS_PATH,
                 "sts_b_path": STS_B_PATH
