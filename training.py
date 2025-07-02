@@ -17,7 +17,7 @@ from sentence_transformers.similarity_functions import SimilarityFunction
 from sentence_transformers.trainer import SentenceTransformerTrainer
 from sentence_transformers.training_args import SentenceTransformerTrainingArguments
 
-# 尝试导入wandb
+
 try:
     import wandb
     WANDB_AVAILABLE = True
@@ -26,7 +26,7 @@ except ImportError:
     WANDB_AVAILABLE = False
     logging.warning("Wandb未安装，将跳过追踪")
 
-# Set the log level to INFO to get more information
+
 logging.basicConfig(format="%(asctime)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S", level=logging.INFO)
 
 def setup_wandb():
@@ -87,8 +87,8 @@ def main():
             })
         
         logging.info("加载数据集...")
-        train_dataset = load_from_disk(DATA_PATH)['train'].select(range(150000))  # 减少训练数据
-        eval_dataset = load_from_disk(DATA_PATH)['eval'].select(range(30000))     # 减少评估数据
+        train_dataset = load_from_disk(DATA_PATH)['train'].select(range(250000))  
+        eval_dataset = load_from_disk(DATA_PATH)['eval'].select(range(5000))     
         
         if wandb_run:
             wandb.config.update({
