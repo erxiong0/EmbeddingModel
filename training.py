@@ -1,21 +1,13 @@
-"""
-The system trains BERT (or any other transformer model like RoBERTa, DistilBERT etc.) on the SNLI + MultiNLI (AllNLI) dataset
-with softmax loss function. At every 1000 training steps, the model is evaluated on the
-STS benchmark dataset
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
-Usage:
-python training_nli.py
-
-OR
-python training_nli.py pretrained_transformer_model_name
-"""
 
 import logging
 import sys
 import traceback
 from datetime import datetime
+import os
 
-# from datasets import load_dataset
 from datasets import load_from_disk
 from config import MODEL_PATH, DATA_PATH, STS_PATH, STS_B_PATH
 
@@ -25,111 +17,206 @@ from sentence_transformers.similarity_functions import SimilarityFunction
 from sentence_transformers.trainer import SentenceTransformerTrainer
 from sentence_transformers.training_args import SentenceTransformerTrainingArguments
 
+# 尝试导入wandb
+try:
+    import wandb
+    WANDB_AVAILABLE = True
+    logging.info("Wandb已安装，将启用追踪")
+except ImportError:
+    WANDB_AVAILABLE = False
+    logging.warning("Wandb未安装，将跳过追踪")
+
 # Set the log level to INFO to get more information
 logging.basicConfig(format="%(asctime)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S", level=logging.INFO)
 
-# You can specify any Hugging Face pre-trained model here, for example, bert-base-uncased, roberta-base, xlm-roberta-base
-# model_name = sys.argv[1] if len(sys.argv) > 1 else "bert-base-uncased"
-model_name = MODEL_PATH.split("/")[-1]
-train_batch_size = 16
+def setup_wandb():
+    """设置Wandb配置"""
+    if not WANDB_AVAILABLE:
+        return None
+    
+    try:
+        # 初始化wandb
+        wandb.init(
+            project="embedding-model-training",
+            name=f"position-sts-embedding-balanced-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
+            config={
+                "model_name": MODEL_PATH.split("/")[-1],
+                "train_batch_size": 128,  # 适中的批次大小
+                "num_train_epochs": 3,    # 适中的训练轮数
+                "learning_rate": 3e-6,    # 适中的学习率
+                "warmup_ratio": 0.1,      # 适中的warmup
+                "fp16": True,
+                "eval_steps": 300,        # 适中的评估频率
+                "save_steps": 30000,      # 适中的保存频率
+                "logging_steps": 30,      # 适中的日志频率
+                "gradient_accumulation_steps": 4,  # 适中的梯度累积
+                "weight_decay": 0.01,     # 适中的权重衰减
+                "dataset_path": DATA_PATH,
+                "sts_path": STS_PATH,
+                "sts_b_path": STS_B_PATH
+            },
+            tags=["embedding", "sentence-transformers", "position-matching", "balanced"]
+        )
+        
+        logging.info(f"Wandb项目: {wandb.run.project}")
+        logging.info(f"Wandb运行ID: {wandb.run.id}")
+        
+        return wandb.run
+        
+    except Exception as e:
+        logging.error(f"设置Wandb失败: {e}")
+        return None
 
-output_dir = "output/training_nli_" + model_name.replace("/", "-") + "-" + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+def main():
+    """主函数"""
+    wandb_run = setup_wandb()
+    
+    try:
+        model_name = MODEL_PATH.split("/")[-1]
+        train_batch_size = 128  
+        
+        output_dir = "output/training_nli_" + model_name.replace("/", "-") + "-" + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        
+        logging.info(f"加载模型: {MODEL_PATH}")
+        model = SentenceTransformer(MODEL_PATH)
+        
+        if wandb_run:
+            wandb.config.update({
+                "model_embedding_dimension": model.get_sentence_embedding_dimension(),
+                "model_max_seq_length": model.max_seq_length
+            })
+        
+        logging.info("加载数据集...")
+        train_dataset = load_from_disk(DATA_PATH)['train'].select(range(150000))  # 减少训练数据
+        eval_dataset = load_from_disk(DATA_PATH)['eval'].select(range(30000))     # 减少评估数据
+        
+        if wandb_run:
+            wandb.config.update({
+                "train_dataset_size": len(train_dataset),
+                "eval_dataset_size": len(eval_dataset),
+                "train_dataset_columns": train_dataset.column_names
+            })
+        
+        logging.info(f"训练数据集: {len(train_dataset)} 样本")
+        logging.info(f"评估数据集: {len(eval_dataset)} 样本")
+        
+        train_loss = losses.SoftmaxLoss(
+            model=model,
+            sentence_embedding_dimension=model.get_sentence_embedding_dimension(),
+            num_labels=2,
+        )
+        
+        logging.info("设置评估器...")
+        stsb_eval_dataset = load_from_disk(STS_PATH)
+        dev_evaluator = EmbeddingSimilarityEvaluator(
+            sentences1=stsb_eval_dataset["sentence1"],
+            sentences2=stsb_eval_dataset["sentence2"],
+            scores=stsb_eval_dataset["score"],
+            main_similarity=SimilarityFunction.COSINE,
+            name="sts-dev",
+        )
+        
+        if wandb_run:
+            wandb.config.update({
+                "sts_eval_size": len(stsb_eval_dataset)
+            })
+        
+        logging.info("评估器设置完成")
+        
 
+        args = SentenceTransformerTrainingArguments(
+            output_dir=output_dir,
+            num_train_epochs=3,                     
+            per_device_train_batch_size=train_batch_size,
+            per_device_eval_batch_size=train_batch_size,
+            gradient_accumulation_steps=4,          
+            warmup_ratio=0.1,                       
+            learning_rate=3e-6,                     
+            weight_decay=0.01,                      
+            fp16=True,
+            bf16=False,
+            eval_strategy="steps",
+            eval_steps=300,                         
+            save_strategy="steps",
+            save_steps=30000,                       
+            save_total_limit=5,                     
+            logging_steps=30,                       
+            run_name="Position_STS_Embedding_Balanced",
+            load_best_model_at_end=True,
+            metric_for_best_model="eval_sts-dev_pearson_cosine",
+            greater_is_better=True,
+            report_to=["wandb"] if WANDB_AVAILABLE else [],
+        )
+        
+        logging.info("开始训练...")
+        trainer = SentenceTransformerTrainer(
+            model=model,
+            args=args,
+            train_dataset=train_dataset,
+            eval_dataset=eval_dataset,
+            loss=train_loss,
+            evaluator=dev_evaluator,
+        )
+        
+        logging.info("训练前评估:")
+        initial_eval = dev_evaluator(model)
+        if wandb_run:
+            wandb.log({"initial_sts_score": initial_eval})
+        
+        trainer.train()
+        
+        logging.info("最终评估...")
+        test_dataset = load_from_disk(STS_B_PATH)
+        test_evaluator = EmbeddingSimilarityEvaluator(
+            sentences1=test_dataset["sentence1"],
+            sentences2=test_dataset["sentence2"],
+            scores=test_dataset["score"],
+            main_similarity=SimilarityFunction.COSINE,
+            name="sts-test",
+        )
+        
+        final_eval = test_evaluator(model)
+        if wandb_run:
+            wandb.log({"final_sts_score": final_eval})
+        
+        final_output_dir = f"{output_dir}/final"
+        model.save(final_output_dir)
+        logging.info(f"模型已保存到: {final_output_dir}")
+        
+        # if wandb_run:
+        #     model_artifact = wandb.Artifact(
+        #         name=f"embedding-model-balanced-{wandb.run.id}",
+        #         type="model",
+        #         description="平衡调优的Embedding模型"
+        #     )
+        #     model_artifact.add_dir(final_output_dir)
+        #     wandb.log_artifact(model_artifact)
+        
+        # model_name = model_name if "/" not in model_name else model_name.split("/")[-1]
+        # try:
+        #     hub_model_name = f"{model_name}-nli-balanced"
+        #     model.push_to_hub(hub_model_name)
+        #     logging.info(f"模型已上传到Hugging Face Hub: {hub_model_name}")
+            
+        #     if wandb_run:
+        #         wandb.config.update({"hub_model_name": hub_model_name})
+                
+        # except Exception as e:
+        #     logging.warning(f"上传到Hugging Face Hub失败 (权限问题): {e}")
+        #     if wandb_run:
+        #         wandb.config.update({"hub_upload_failed": True, "hub_error": str(e)})
+        
+        # if wandb_run:
+        #     wandb.finish()
+        
+        logging.info("平衡训练完成!")
+        
+    except Exception as e:
+        logging.error(f"训练过程中出错: {e}")
+        if wandb_run:
+            wandb.finish(exit_code=1)
+        import traceback
+        traceback.print_exc()
 
-# 1. Here we define our SentenceTransformer model. If not already a Sentence Transformer model, it will automatically
-# create one with "mean" pooling.
-model = SentenceTransformer(model_name)
-
-# 2. Load the AllNLI dataset: https://huggingface.co/datasets/sentence-transformers/all-nli
-# We'll start with 10k training samples, but you can increase this to get a stronger model
-# logging.info("Read AllNLI train dataset")
-logging.info("Read dataset")
-
-# {'premise': 'A person on a horse jumps over a broken down airplane.', 'hypothesis': 'A person is training his horse for a competition.', 'label': 1}
-# train_dataset = load_dataset("sentence-transformers/all-nli", "pair-class", split="train").select(range(10000))
-# eval_dataset = load_dataset("sentence-transformers/all-nli", "pair-class", split="dev").select(range(1000))
-
-train_dataset = load_from_disk(DATA_PATH)['train'].select(range(50000))
-eval_dataset = load_from_disk(DATA_PATH)['eval'].select(range(5000))
-
-logging.info(train_dataset)
-
-# 3. Define our training loss: https://sbert.net/docs/package_reference/sentence_transformer/losses.html#softmaxloss
-train_loss = losses.SoftmaxLoss(
-    model=model,
-    sentence_embedding_dimension=model.get_sentence_embedding_dimension(),
-    num_labels=3,
-)
-
-# 4. Define an evaluator for use during training. This is useful to keep track of alongside the evaluation loss.
-# stsb_eval_dataset = load_dataset("sentence-transformers/stsb", split="validation")
-stsb_eval_dataset = load_from_disk(STS_PATH)
-dev_evaluator = EmbeddingSimilarityEvaluator(
-    sentences1=stsb_eval_dataset["sentence1"],
-    sentences2=stsb_eval_dataset["sentence2"],
-    scores=stsb_eval_dataset["score"],
-    main_similarity=SimilarityFunction.COSINE,
-    name="sts-dev",
-)
-logging.info("Evaluation before training:")
-dev_evaluator(model)
-
-# 5. Define the training arguments
-args = SentenceTransformerTrainingArguments(
-    # Required parameter:
-    output_dir=output_dir,
-    # Optional training parameters:
-    num_train_epochs=1,
-    per_device_train_batch_size=train_batch_size,
-    per_device_eval_batch_size=train_batch_size,
-    warmup_ratio=0.1,
-    fp16=True,  # Set to False if you get an error that your GPU can't run on FP16
-    bf16=False,  # Set to True if you have a GPU that supports BF16
-    # Optional tracking/debugging parameters:
-    eval_strategy="steps",
-    eval_steps=100,
-    save_strategy="steps",
-    save_steps=100,
-    save_total_limit=2,
-    logging_steps=100,
-    run_name="nli-v1",  # Will be used in W&B if `wandb` is installed
-)
-
-# 6. Create the trainer & start training
-trainer = SentenceTransformerTrainer(
-    model=model,
-    args=args,
-    train_dataset=train_dataset,
-    eval_dataset=eval_dataset,
-    loss=train_loss,
-    evaluator=dev_evaluator,
-)
-trainer.train()
-
-# 7. Evaluate the model performance on the STS Benchmark test dataset
-# test_dataset = load_dataset("sentence-transformers/stsb", split="test")
-test_dataset = load_from_disk(STS_B_PATH)
-test_evaluator = EmbeddingSimilarityEvaluator(
-    sentences1=test_dataset["sentence1"],
-    sentences2=test_dataset["sentence2"],
-    scores=test_dataset["score"],
-    main_similarity=SimilarityFunction.COSINE,
-    name="sts-test",
-)
-test_evaluator(model)
-
-# 8. Save the trained & evaluated model locally
-final_output_dir = f"{output_dir}/final"
-model.save(final_output_dir)
-
-# 9. (Optional) save the model to the Hugging Face Hub!
-# It is recommended to run `huggingface-cli login` to log into your Hugging Face account first
-model_name = model_name if "/" not in model_name else model_name.split("/")[-1]
-try:
-    model.push_to_hub(f"{model_name}-nli-v1")
-except Exception:
-    logging.error(
-        f"Error uploading model to the Hugging Face Hub:\n{traceback.format_exc()}To upload it manually, you can run "
-        f"`huggingface-cli login`, followed by loading the model using `model = SentenceTransformer({final_output_dir!r})` "
-        f"and saving it using `model.push_to_hub('{model_name}-nli-v1')`."
-    )
+if __name__ == "__main__":
+    main()
